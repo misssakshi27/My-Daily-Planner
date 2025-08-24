@@ -1,175 +1,119 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Daily Planner</title>
   <style>
-    body { font-family: Arial, sans-serif; background: #f4f6f9; padding: 20px; }
+    body { font-family: Arial, sans-serif; background: #f7f9fc; margin: 0; padding: 20px; }
     h1 { text-align: center; }
-    .welcome { text-align: center; margin-bottom: 20px; font-size: 18px; }
-    .quote { text-align: center; font-style: italic; margin-bottom: 20px; color: #444; }
-    .day-container { margin: 20px auto; max-width: 500px; }
-    .task-box { background: white; padding: 15px; margin: 10px 0; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
-    .task-box h2 { margin-top: 0; font-size: 18px; }
-    ul { list-style: none; padding: 0; }
-    li { display: flex; align-items: center; margin: 5px 0; }
-    li.completed span { text-decoration: line-through; color: gray; }
-    li span { flex: 1; }
-    .readonly input[type="checkbox"] { pointer-events: none; }
-    #taskInput { padding: 8px; width: 70%; }
-    #addBtn, #shareBtn { padding: 8px 15px; margin-top: 10px; cursor: pointer; border: none; border-radius: 5px; }
-    #addBtn { background: #007bff; color: white; }
-    #shareBtn { background: #28a745; color: white; margin-left: 5px; }
+    .planner { max-width: 600px; margin: auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);}
+    .task { display: flex; align-items: center; margin: 8px 0; }
+    .task input[type="checkbox"] { margin-right: 10px; }
+    .task input[disabled] { cursor: not-allowed; }
+    #new-task { width: 70%; padding: 8px; }
+    button { padding: 8px 12px; margin-left: 8px; border: none; border-radius: 8px; cursor: pointer; background: #007bff; color: white; }
+    button:hover { background: #0056b3; }
+    .date-title { font-weight: bold; margin-top: 20px; }
+    .locked { color: gray; }
+    .quote { margin-top: 15px; font-style: italic; text-align: center; color: #444; }
   </style>
 </head>
 <body>
-  <h1>Daily Planner</h1>
-  <div class="welcome" id="welcome"></div>
-  <div class="quote" id="quote"></div>
-  <div class="day-container" id="planner"></div>
+  <div class="planner">
+    <h1>📅 Daily Planner</h1>
+    <p class="quote" id="quote"></p>
+    <div id="task-container"></div>
+    <input type="text" id="new-task" placeholder="Add new task...">
+    <button onclick="addTask()">Add Task</button>
+    <button onclick="shareProgress()">Share Progress</button>
+  </div>
 
   <script>
-    const planner = document.getElementById("planner");
-    const today = new Date().toISOString().split("T")[0]; // yyyy-mm-dd
-    let data = JSON.parse(localStorage.getItem("plannerData")) || {};
-    let username = localStorage.getItem("plannerUser");
-
-    // Motivational quotes
     const quotes = [
-      "Believe in yourself and all that you are.",
-      "Small progress each day adds up to big results.",
       "Push yourself, because no one else is going to do it for you.",
-      "Dream big. Start small. Act now.",
-      "Don’t watch the clock; do what it does. Keep going.",
       "Success is the sum of small efforts repeated day in and day out.",
       "Your limitation—it’s only your imagination.",
-      "Hard work beats talent when talent doesn’t work hard."
+      "Great things never come from comfort zones.",
+      "Dream it. Wish it. Do it."
     ];
 
-    // Pick daily quote (based on date to keep stable for the whole day)
-    function getDailyQuote() {
-      const dayNumber = new Date().getDate();
-      return quotes[dayNumber % quotes.length];
-    }
+    document.getElementById("quote").innerText = 
+      quotes[new Date().getDate() % quotes.length];
 
-    // Ask for user name if not set
-    if (!username) {
-      username = prompt("Please enter your name:");
-      if (!username) username = "User";
-      localStorage.setItem("plannerUser", username);
-    }
-    document.getElementById("welcome").innerText = `Hi ${username}, here’s your planner for today!`;
-    document.getElementById("quote").innerText = `"${getDailyQuote()}"`;
+    const taskContainer = document.getElementById("task-container");
+    const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+    let allTasks = JSON.parse(localStorage.getItem("dailyTasks")) || {};
 
-    // Carry forward incomplete tasks
-    carryForwardTasks();
-
-    function carryForwardTasks() {
-      const dates = Object.keys(data).sort();
-      if (dates.length > 0) {
-        const lastDate = dates[dates.length - 1];
-        if (lastDate < today) {
-          const incomplete = data[lastDate].tasks.filter(t => !t.done);
-          if (!data[today]) data[today] = { tasks: [] };
-          data[today].tasks = [...incomplete, ...data[today].tasks];
-          saveData();
-        }
+    // --- rollover logic ---
+    if (!allTasks[today]) {
+      const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
+      let carryOver = [];
+      if (allTasks[yesterday]) {
+        carryOver = allTasks[yesterday].filter(t => !t.done); // only incomplete
       }
+      allTasks[today] = carryOver;
+      localStorage.setItem("dailyTasks", JSON.stringify(allTasks));
     }
 
-    function saveData() {
-      localStorage.setItem("plannerData", JSON.stringify(data));
-    }
+    function renderTasks() {
+      taskContainer.innerHTML = "";
+      for (let date in allTasks) {
+        const isToday = date === today;
+        const dateTitle = document.createElement("div");
+        dateTitle.className = "date-title";
+        dateTitle.innerText = isToday ? `Today (${date})` : date;
+        taskContainer.appendChild(dateTitle);
 
-    function renderPlanner() {
-      planner.innerHTML = "";
-      const dates = Object.keys(data).sort().reverse();
-      dates.forEach(date => {
-        const box = document.createElement("div");
-        box.className = "task-box";
-        box.innerHTML = `<h2>${date === today ? "Today" : date}</h2>
-                         <ul id="list-${date}"></ul>`;
+        allTasks[date].forEach((task, index) => {
+          const taskDiv = document.createElement("div");
+          taskDiv.className = "task";
 
-        const ul = box.querySelector("ul");
-
-        data[date].tasks.forEach((task, i) => {
-          const li = document.createElement("li");
-          li.className = task.done ? "completed" : "";
           const checkbox = document.createElement("input");
           checkbox.type = "checkbox";
           checkbox.checked = task.done;
-
-          if (date !== today) li.classList.add("readonly");
-
-          checkbox.addEventListener("change", () => {
-            if (date === today && !task.done && checkbox.checked) {
-              task.done = true;
-              li.classList.add("completed");
-              checkbox.disabled = true; // ✅ Lock checkbox after checking
-              saveData();
-            } else {
-              checkbox.checked = task.done; // prevent unchecking
+          checkbox.disabled = !isToday; // only today editable
+          checkbox.onchange = () => {
+            if (checkbox.checked) {
+              allTasks[date][index].done = true;
+              localStorage.setItem("dailyTasks", JSON.stringify(allTasks));
             }
-          });
+            checkbox.disabled = true; // lock once checked
+          };
 
-          if (task.done) checkbox.disabled = true; // lock already completed
+          const label = document.createElement("span");
+          label.innerText = task.text;
+          if (!isToday) label.className = "locked";
 
-          const span = document.createElement("span");
-          span.textContent = task.text;
-
-          li.appendChild(checkbox);
-          li.appendChild(span);
-          ul.appendChild(li);
+          taskDiv.appendChild(checkbox);
+          taskDiv.appendChild(label);
+          taskContainer.appendChild(taskDiv);
         });
+      }
+    }
 
-        // Add input only for today
-        if (date === today) {
-          const input = document.createElement("input");
-          input.type = "text";
-          input.id = "taskInput";
-          input.placeholder = "New task...";
+    function addTask() {
+      const input = document.getElementById("new-task");
+      const text = input.value.trim();
+      if (!text) return;
+      allTasks[today].push({ text, done: false });
+      input.value = "";
+      localStorage.setItem("dailyTasks", JSON.stringify(allTasks));
+      renderTasks();
+    }
 
-          const addBtn = document.createElement("button");
-          addBtn.id = "addBtn";
-          addBtn.textContent = "Add";
-
-          addBtn.addEventListener("click", () => {
-            if (input.value.trim() !== "") {
-              data[today].tasks.push({ text: input.value, done: false });
-              input.value = "";
-              saveData();
-              renderPlanner();
-            }
-          });
-
-          const shareBtn = document.createElement("button");
-          shareBtn.id = "shareBtn";
-          shareBtn.textContent = "Share Progress";
-          shareBtn.addEventListener("click", () => shareProgress(date));
-
-          box.appendChild(input);
-          box.appendChild(addBtn);
-          box.appendChild(shareBtn);
-        }
-
-        planner.appendChild(box);
+    function shareProgress() {
+      const todayTasks = allTasks[today] || [];
+      let msg = `📅 Progress for ${today}\n\n`;
+      todayTasks.forEach(t => {
+        msg += `${t.done ? "✅" : "❌"} ${t.text}\n`;
+      });
+      navigator.clipboard.writeText(msg).then(() => {
+        alert("Progress copied! Paste it in chat to share.");
       });
     }
 
-    function shareProgress(date) {
-      const tasks = data[date].tasks.map(t => `${t.done ? "✅" : "❌"} ${t.text}`).join("\n");
-      const text = `My progress on ${date}:\n\n${tasks}\n\n~ ${username}`;
-      navigator.clipboard.writeText(text).then(() => {
-        alert("Progress copied! You can now share it with friends.");
-      });
-    }
-
-    // Initialize if today's data not present
-    if (!data[today]) data[today] = { tasks: [] };
-
-    saveData();
-    renderPlanner();
+    renderTasks();
   </script>
 </body>
 </html>
